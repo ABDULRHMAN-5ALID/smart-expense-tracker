@@ -65,24 +65,42 @@ streamlit run app.py
 ## 📂 بنية المشروع
 ```text
 smart-expense-tracker/
-├─ app.py                # الواجهة (Streamlit) + تبويبات + فلاتر + استيراد/تصدير
-├─ db.py                 # SQLite + CRUD (إضافة/تحديث/حذف/عرض)
-├─ forecast.py           # التنبؤ بالفئات (تجميع يومي → تقدير شهري)
-├─ anomalies.py          # كشف غير الاعتيادية (IsolationForest)
-├─ optimizer.py          # مُحسّن الميزانية (PuLP)
-├─ utils.py              # أدوات ومسارات
-├─ data/                 # ملف قاعدة البيانات المحلية (expenses.db)
-├─ assets/               # لقطات/خطوط (اختياري)
-└─ .streamlit/           # ملفات static إن وُجدت
+├─ app.py              
+├─ db.py                
+├─ forecast.py          
+├─ anomalies.py        
+├─ optimizer.py         
+├─ utils.py             
+├─ data/                
+├─ assets/              
+└─ .streamlit/          
 ```
 
-> **لقطات شاشة (اختياري):** ضع صورك في <span dir="ltr"><code>assets/screenshots/</code></span> ثم أدرجها:
-> ```md
-> ![Dashboard](assets/screenshots/dashboard.png)
-> ![Forecast](assets/screenshots/forecast.png)
-> ![Anomalies](assets/screenshots/anomalies.png)
-> ![Optimizer](assets/screenshots/optimizer.png)
-> ```
+<div dir="rtl">
+
+## لقطات من الواجهة
+
+<p align="center">
+  <img src="assets/screenshots/hero.png" alt="الواجهة الرئيسية" width="100%">
+</p>
+
+<table>
+  <tr>
+    <td><img src="assets/screenshots/dashboard.png" alt="لوحة التحكم" width="100%"><br><sub>لوحة التحكم</sub></td>
+    <td><img src="assets/screenshots/filters.png" alt="شريط الفلاتر" width="100%"><br><sub>شريط الفلاتر</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/forecast.png" alt="التنبؤ بالمصاريف" width="100%"><br><sub>التنبؤ</sub></td>
+    <td><img src="assets/screenshots/anomalies.png" alt="المصاريف غير الاعتيادية" width="100%"><br><sub>غير الاعتيادية</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/optimizer.png" alt="مُحسّن الميزانية" width="100%"><br><sub>مُحسّن الميزانية</sub></td>
+    <td><img src="assets/screenshots/data_sc.png" alt="إدارة البيانات والتحرير" width="100%"><br><sub>إدارة البيانات</sub></td>
+  </tr>
+</table>
+
+</div>
+
 
 ---
 
@@ -94,9 +112,11 @@ plotly>=5.18
 scikit-learn>=1.3
 pulp>=2.7
 python-dateutil>=2.8
-```
+xgboost>=1.7
 
+```
 ---
+
 
 ## ☁️ النشر على Streamlit Cloud
 1. اربط حسابك بـ <span dir="ltr">Streamlit Cloud</span>.  

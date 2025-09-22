@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from dateutil import parser
 
-# نحاول استخدام XGBoost، وإن تعذّر نرجع لمتوسط بسيط
 try:
     import xgboost as xgb
     HAS_XGB = True
@@ -11,7 +10,6 @@ except Exception:
     HAS_XGB = False
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    """تحضير ميزات زمنية + لواحق لكل فئة."""
     df = df.copy()
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values('date')
@@ -31,10 +29,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 def train_and_forecast_per_category(df: pd.DataFrame) -> dict:
-    """
-    يرجّع توقع مبدئي لكل تصنيف (قيمة يومية تقريبية).
-    لو البيانات قليلة أو XGBoost غير متاح → يستخدم متوسط بسيط.
-    """
+
     if df.empty:
         return {}
 
@@ -62,5 +57,4 @@ def train_and_forecast_per_category(df: pd.DataFrame) -> dict:
     return preds
 
 def monthly_projection(preds_daily: dict, days=30) -> dict:
-    """تحويل توقع يومي تقريبي إلى تقدير شهري."""
     return {k: float(v) * days for k, v in preds_daily.items()}

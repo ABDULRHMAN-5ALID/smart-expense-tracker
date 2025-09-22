@@ -12,7 +12,6 @@ def detect_anomalies(df: pd.DataFrame, window_days: int = 90, contamination: flo
 
     data = df.copy()
     data["date"] = pd.to_datetime(data["date"])
-    # نركز على آخر window_days يوم إن وُجد
     if len(data) > 0:
         max_day = data["date"].max()
         data = data[data["date"] >= (max_day - pd.Timedelta(days=window_days))]
@@ -21,7 +20,6 @@ def detect_anomalies(df: pd.DataFrame, window_days: int = 90, contamination: flo
     for cat, g in data.groupby("category"):
         g = g.sort_values("date")
         if len(g) < 20:
-            # بيانات قليلة: نستخدم قاعدة بسيطة
             if len(g) == 0:
                 continue
             thr = g["amount"].quantile(0.95)
@@ -30,13 +28,11 @@ def detect_anomalies(df: pd.DataFrame, window_days: int = 90, contamination: flo
                 alerts.append({"category": cat, "date": r["date"], "amount": r["amount"], "level": "medium"})
             continue
 
-        # نموذج IsolationForest
         X = g[["amount"]].values
         iso = IsolationForest(contamination=contamination, random_state=42)
-        scores = iso.fit_predict(X)  # -1 شاذ، 1 طبيعي
+        scores = iso.fit_predict(X)
         g = g.assign(is_anom=(scores == -1))
 
-        # مستوى الشدة بالاعتماد على موقع المبلغ ضمن التوزيع
         p90 = g["amount"].quantile(0.90)
         p97 = g["amount"].quantile(0.97)
         for _, r in g[g["is_anom"]].iterrows():

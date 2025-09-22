@@ -38,12 +38,10 @@ def optimize_budget(
     # قيد الدخل والادخار
     prob += pulp.lpSum([alloc[c] for c in cats]) <= monthly_income - savings_target
 
-    # فواتير ثابتة (حد أدنى)
     for c, val in fixed_bills_map.items():
         if c in alloc:
             prob += alloc[c] >= float(val)
 
-    # حدود اختيارية
     for c, lo in min_alloc.items():
         if c in alloc:
             prob += alloc[c] >= float(lo)

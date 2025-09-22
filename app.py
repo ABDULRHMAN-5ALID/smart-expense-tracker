@@ -1,4 +1,3 @@
-# app.py (واجهة محسّنة RTL + تبويبات + أدوات بيانات + فلاتر شاملة)
 import io
 import random
 import datetime
@@ -9,31 +8,74 @@ import streamlit as st
 from db import init_db, list_expenses, add_expense
 from forecast import train_and_forecast_per_category, monthly_projection
 
-st.set_page_config(page_title="متتبع المصاريف الذكي", page_icon="💸", layout="wide")
+st.set_page_config(
+    page_title="متتبع المصاريف الذكي",
+    page_icon="💸",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# —— تنسيقات واجهة: اتجاه عربي + تحسينات بسيطة —— #
-st.markdown("""
+SIDEBAR_WIDTH = 320
+
+st.markdown(f"""
 <style>
-html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
-  direction: rtl; text-align: right;
-}
-h1, h2, h3, h4 { letter-spacing: .2px; }
-.block-container { padding-top: 1.2rem; }
-[data-testid="stDataFrame"] .row_heading, [data-testid="stDataFrame"] th, [data-testid="stDataFrame"] td {
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {{
+  direction: rtl;
+  text-align: right;
+}}
+[data-testid="stDataFrame"] th, [data-testid="stDataFrame"] td {{
   text-align: right !important;
-}
-.stButton>button { border-radius: 10px; padding: .5rem 1rem; font-weight: 600; }
+}}
+@media (min-width: 1100px) {{
+  div[data-testid="stAppViewContainer"] {{
+    display: flex !important;
+    flex-direction: row-reverse !important;
+    align-items: stretch !important;
+    gap: 0 !important;
+  }}
+  section[data-testid="stSidebar"][aria-expanded="true"] {{
+    flex: 0 0 {SIDEBAR_WIDTH}px !important;
+    max-width: {SIDEBAR_WIDTH}px !important;
+    border-left: 1px solid #2a2f3a;
+    border-right: none !important;
+    background: inherit;
+    overflow: hidden;
+  }}
+  section[data-testid="stSidebar"][aria-expanded="false"] {{
+    flex: 0 0 0 !important;
+    max-width: 0 !important;
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+  }}
+  div[data-testid="stAppViewContainer"] > .main {{
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    overflow: visible;
+  }}
+}}
+@media (max-width: 1099.98px) {{
+  div[data-testid="stAppViewContainer"] {{ display: block !important; }}
+  section[data-testid="stSidebar"] {{
+    width: 100% !important;
+    max-width: 100% !important;
+    border-left: none !important;
+  }}
+}}
+.stButton>button {{ border-radius: 10px; padding: .5rem 1rem; font-weight: 600; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ---- أدوات مساعدة ----- #
 def fmt_currency(x: float, suffix=" ريال"):
     try:
         return f"{x:,.0f}{suffix}"
     except Exception:
         return f"{x}{suffix}"
 
-def seed_demo(n=80):
+def seed_demo(n=120):
     cats = ["طعام", "مواصلات", "فواتير", "تسوق", "صحة", "تعليم", "ترفيه", "أخرى"]
     pays = ["نقدًا", "بطاقة", "Apple Pay", "STC Pay", "أخرى"]
     today = datetime.date.today()
@@ -41,13 +83,17 @@ def seed_demo(n=80):
         days_ago = random.randint(0, 120)
         d = today - datetime.timedelta(days=days_ago)
         amount = round(random.uniform(10, 600), 2)
-        add_expense(amount, random.choice(cats), random.choice(pays), str(d),
-                    random.choice(["", "قهوة", "سوبرماركت", "أجرة", "فاتورة", "مطعم", "ملابس"]))
+        add_expense(
+            amount,
+            random.choice(cats),
+            random.choice(pays),
+            str(d),
+            random.choice(["", "قهوة", "سوبرماركت", "أجرة", "فاتورة", "مطعم", "ملابس"]),
+        )
 
 def bootstrap():
     init_db()
 
-# ---- أقسام الواجهة ----- #
 def sidebar_controls():
     with st.sidebar:
         st.header("إضافة مصروف جديد")
@@ -59,35 +105,40 @@ def sidebar_controls():
             payment = st.selectbox("طريقة الدفع", ["نقدًا","بطاقة","Apple Pay","STC Pay","أخرى"])
         date = st.date_input("التاريخ", value=datetime.date.today())
         note = st.text_input("ملاحظة", placeholder="وصف قصير للعملية")
-        add_col, demo_col = st.columns([1,1])
-        with add_col:
-            if st.button("➕ إضافة"):
+
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("➕ إضافة", use_container_width=True):
                 if amount > 0:
                     add_expense(float(amount), category, payment, str(date), note)
                     st.success("تمت الإضافة ✅")
                     st.rerun()
                 else:
                     st.error("المبلغ يجب أن يكون أكبر من 0")
-        with demo_col:
-            if st.button("⚡ تحميل بيانات تجريبية"):
+        with col_btn2:
+            if st.button("⚡ تحميل بيانات تجريبية", use_container_width=True):
                 seed_demo(120)
                 st.success("تم تحميل بيانات تجريبية ✅")
                 st.rerun()
 
         st.markdown("---")
         st.subheader("استيراد/تصدير")
-        # تصدير
-        if st.button("⬇️ تصدير CSV"):
-            rows_all = list_expenses(limit=10_000)
-            df = pd.DataFrame(rows_all)
-            if df.empty:
-                st.info("لا توجد بيانات للتصدير.")
-            else:
-                buf = io.StringIO()
-                df.to_csv(buf, index=False, encoding="utf-8-sig")
-                st.download_button("تحميل الملف", buf.getvalue(),
-                                   file_name="expenses_export.csv", mime="text/csv")
-        # استيراد
+
+        rows_all = list_expenses(limit=10_000)
+        df_export = pd.DataFrame(rows_all)
+        if df_export.empty:
+            st.button("⬇️ تصدير CSV", disabled=True, use_container_width=True)
+        else:
+            buf = io.StringIO()
+            df_export.to_csv(buf, index=False, encoding="utf-8-sig")
+            st.download_button(
+                "⬇️ تصدير CSV",
+                buf.getvalue(),
+                file_name="expenses_export.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
         uploaded = st.file_uploader("⬆️ استيراد CSV (amount,category,payment_method,date,note)", type=["csv"])
         if uploaded is not None:
             try:
@@ -113,7 +164,6 @@ def dashboard_tab(df_all: pd.DataFrame):
     df_all = df_all.copy()
     df_all["date"] = pd.to_datetime(df_all["date"])
 
-    # KPIs
     c1, c2, c3 = st.columns(3)
     month_mask = (df_all["date"].dt.to_period("M") == pd.Timestamp.today().to_period("M"))
     total_this_month = df_all.loc[month_mask, "amount"].sum()
@@ -124,7 +174,6 @@ def dashboard_tab(df_all: pd.DataFrame):
     c2.metric("أعلى تصنيف صرف", top_cat)
     c3.metric("متوسط يومي", fmt_currency(avg_per_day))
 
-    # الرسوم
     monthly = df_all.groupby(df_all["date"].dt.to_period("M"))["amount"].sum().reset_index()
     monthly["date"] = monthly["date"].astype(str)
     fig1 = px.bar(monthly, x="date", y="amount", title="إجمالي المصاريف الشهرية")
@@ -208,7 +257,6 @@ def optimizer_tab(df_all: pd.DataFrame):
             with c3:
                 max_bounds[c] = st.number_input(f"حد أقصى لـ «{c}»", min_value=0.0, value=0.0, step=50.0, key=f"max_{c}")
 
-    # baseline
     try:
         preds_daily = train_and_forecast_per_category(df[["amount","category","date"]])
         baseline = monthly_projection(preds_daily, days=30) if preds_daily else {}
@@ -256,7 +304,6 @@ def data_tab(df_all: pd.DataFrame):
         st.info("لا توجد بيانات بعد.")
         return
 
-    # نعرض الأعمدة القابلة للتحرير
     view_cols = ["id", "amount", "category", "payment_method", "date", "note"]
     df_view = df_all[view_cols].copy()
 
@@ -265,7 +312,7 @@ def data_tab(df_all: pd.DataFrame):
         df_view,
         num_rows="dynamic",
         use_container_width=True,
-        disabled=["id"],  # id ثابت
+        disabled=["id"],
         column_config={
             "amount": st.column_config.NumberColumn("amount", step=1.0, help="المبلغ"),
             "category": st.column_config.SelectboxColumn("category", options=["طعام","مواصلات","فواتير","تسوق","صحة","تعليم","ترفيه","أخرى"]),
@@ -276,12 +323,10 @@ def data_tab(df_all: pd.DataFrame):
         key="editor_table",
     )
 
-    # ——— حفظ التعديلات ———
     save_col, del_col = st.columns([1,1])
     with save_col:
         if st.button("💾 حفظ التعديلات"):
             try:
-                # قارن الصفوف: أي صف تغيّر نحدّثه
                 from db import update_expense
                 changed = 0
                 orig = df_view.set_index("id")
@@ -291,7 +336,6 @@ def data_tab(df_all: pd.DataFrame):
                     for col in ["amount","category","payment_method","date","note"]:
                         old_val = None if eid not in orig.index else orig.loc[eid, col]
                         new_val = new.loc[eid, col]
-                        # توحيد التاريخ إلى نص ISO
                         if col == "date" and pd.notna(new_val):
                             new_val = pd.to_datetime(new_val).date().isoformat()
                             old_val = pd.to_datetime(old_val).date().isoformat() if pd.notna(old_val) else old_val
@@ -304,9 +348,7 @@ def data_tab(df_all: pd.DataFrame):
             except Exception as e:
                 st.error(f"تعذّر الحفظ: {e}")
 
-    # ——— الحذف ———
     with del_col:
-        # واجهة اختيار صفوف للحذف
         ids = edited["id"].tolist()
         sel_to_delete = st.multiselect("اختر السجلات المراد حذفها", ids, label_visibility="collapsed")
         if st.button("🗑️ حذف المحدد"):
@@ -318,13 +360,7 @@ def data_tab(df_all: pd.DataFrame):
             except Exception as e:
                 st.error(f"تعذّر الحذف: {e}")
 
-# —— دالة الفلاتر ——
-def apply_filters(df: pd.DataFrame,
-                  date_range,
-                  cats,
-                  pays,
-                  amount_min,
-                  amount_max) -> pd.DataFrame:
+def apply_filters(df: pd.DataFrame, date_range, cats, pays, amount_min, amount_max) -> pd.DataFrame:
     if df.empty:
         return df
     out = df.copy()
@@ -344,16 +380,12 @@ def apply_filters(df: pd.DataFrame,
 
 def main():
     bootstrap()
-    st.title("💸 متتبع المصاريف الذكي — واجهة محسّنة")
-
-    # عناصر الشريط الجانبي (إضافة + أدوات بيانات)
+    st.title("💸 متتبع المصاريف الذكي")
     sidebar_controls()
 
-    # تحميل البيانات
     rows_all = list_expenses(limit=10_000)
     df_all = pd.DataFrame(rows_all)
 
-    # ——— شريط فلاتر تفاعلي ———
     st.markdown("### 🎛️ الفلاتر")
     if df_all.empty:
         st.info("لا توجد بيانات بعد لاستخدام الفلاتر.")
@@ -362,21 +394,16 @@ def main():
         df_all["date"] = pd.to_datetime(df_all["date"])
         min_d = df_all["date"].min().date()
         max_d = df_all["date"].max().date()
-        colF1, colF2, colF3 = st.columns([2,2,2])
 
+        colF1, colF2, colF3 = st.columns([2,2,2])
         with colF1:
             dr = st.date_input("الفترة", value=(min_d, max_d))
-            if isinstance(dr, tuple) and len(dr) == 2:
-                date_range = (dr[0], dr[1])
-            else:
-                date_range = (min_d, max_d)
+            date_range = (dr[0], dr[1]) if isinstance(dr, tuple) and len(dr) == 2 else (min_d, max_d)
 
         cats_all = sorted(df_all["category"].unique().tolist())
         pays_all = sorted(df_all["payment_method"].unique().tolist())
-
         with colF2:
             cats_sel = st.multiselect("التصنيفات", cats_all, default=cats_all)
-
         with colF3:
             pays_sel = st.multiselect("طرق الدفع", pays_all, default=pays_all)
 
@@ -386,7 +413,6 @@ def main():
         with cMax:
             a_max = st.number_input("الحد الأقصى للمبلغ (اختياري)", min_value=0.0, value=0.0, step=10.0)
 
-        # تطبيق الفلاتر
         filt_df = apply_filters(
             df_all,
             date_range=date_range,
@@ -398,7 +424,6 @@ def main():
 
         st.caption(f"النتائج بعد الفلترة: {len(filt_df)} عملية من أصل {len(df_all)}.")
 
-    # —— تبويبات مرتبطة بالفلاتر —— #
     tabs = st.tabs(["📊 اللوحة", "🤖 التنبؤ", "🚨 غير الاعتيادية", "🧮 المُحسّن", "🗂️ البيانات"])
     with tabs[0]: dashboard_tab(filt_df)
     with tabs[1]: forecast_tab(filt_df)
