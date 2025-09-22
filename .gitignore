@@ -6,3 +6,7 @@ data/*.db
 .streamlit/static/fonts/*.ttf
 .idea/
 .vscode/
+assets/*.mp4
+assets/*.mov
+assets/*.mkv
+assets/*.webm
