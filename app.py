@@ -174,24 +174,29 @@ def anomalies_tab(df_all: pd.DataFrame):
     else:
         st.dataframe(alerts, use_container_width=True)
 
-def optimizer_tab(df_all: pd.DataFrame):
+def optimizer_tab(df_all: pd.DataFrame, user_id: int):
     st.subheader("🧮 مُحسّن الميزانية")
     if df_all.empty:
         st.info("أضف بيانات أولًا.")
         return
-    cats = sorted(df_all["category"].unique().tolist())
+
     income = st.number_input("💰 الدخل الشهري", min_value=0.0, value=8000.0, step=100.0)
     target = st.number_input("🎯 هدف الادخار", min_value=0.0, value=1000.0, step=100.0)
 
-    preds_daily = train_and_forecast_per_category(df_all[["amount","category","date"]])
-    baseline = monthly_projection(preds_daily, days=30) if preds_daily else {}
-
     if st.button("احسب التوزيع"):
-        status, allocs = optimize_budget(baseline, income, target, {}, {}, {})
-        st.dataframe(pd.DataFrame([{
-            "التصنيف": c,
-            "المقترح": round(allocs.get(c,0.0),2)
-        } for c in cats]))
+        allocs = optimize_budget(income, target, user_id)
+
+        if not allocs:
+            st.error("⚠️ هدف الادخار أكبر من الدخل")
+        else:
+            df_alloc = pd.DataFrame([
+                {"التصنيف": c, "المقترح": v} for c, v in allocs.items()
+            ])
+            st.dataframe(df_alloc, use_container_width=True)
+
+            fig = px.pie(df_alloc, values="المقترح", names="التصنيف", title="التوزيع المقترح")
+            st.plotly_chart(fig, use_container_width=True)
+
 
 def data_tab(user_id: int, df_all: pd.DataFrame):
     st.subheader("🗂️ إدارة البيانات")
@@ -242,7 +247,7 @@ def main():
     with tabs[0]: dashboard_tab(df_all)
     with tabs[1]: forecast_tab(df_all)
     with tabs[2]: anomalies_tab(df_all)
-    with tabs[3]: optimizer_tab(df_all)
+    with tabs[3]: optimizer_tab(df_all, user_id)
     with tabs[4]: data_tab(user_id, df_all)
 
 if __name__ == "__main__":

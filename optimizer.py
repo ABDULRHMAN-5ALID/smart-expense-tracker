@@ -1,56 +1,49 @@
-# optimizer.py
-from typing import Dict
 import pulp
+import pandas as pd
+from db import list_expenses
 
-def optimize_budget(
-    forecast_per_cat: Dict[str, float],
-    monthly_income: float,
-    savings_target: float,
-    fixed_bills_map: Dict[str, float] | None = None,
-    min_alloc: Dict[str, float] | None = None,
-    max_alloc: Dict[str, float] | None = None,
-):
+def optimize_budget(income: float, saving_goal: float, user_id: int, month: int = None, year: int = None):
     """
-    يحسب توزيع ميزانية مثالي للفئات بحيث:
-      - مجموع المخصصات <= الدخل - هدف الادخار
-      - احترام الفواتير الثابتة كحد أدنى
-      - تقليل الانحراف عن baseline (التوقع/المتوسط)
+    مُحسّن الميزانية الذكي مع حدود دنيا وعليا لكل تصنيف.
     """
-    fixed_bills_map = fixed_bills_map or {}
-    min_alloc = min_alloc or {}
-    max_alloc = max_alloc or {}
+    available = income - saving_goal
+    if available <= 0:
+        return {}
 
-    cats = list(forecast_per_cat.keys())
-    prob = pulp.LpProblem("BudgetOptimizer", pulp.LpMinimize)
+    rows = list_expenses(limit=1000, month=month, year=year, user_id=user_id)
+    df = pd.DataFrame(rows)
 
-    # متغيرات: alloc لكل فئة + dev+ / dev- لقياس الانحراف |alloc - baseline|
-    alloc = {c: pulp.LpVariable(f"alloc_{c}", lowBound=0) for c in cats}
-    dev_p = {c: pulp.LpVariable(f"devp_{c}", lowBound=0) for c in cats}
-    dev_n = {c: pulp.LpVariable(f"devn_{c}", lowBound=0) for c in cats}
+    # التصنيفات الأساسية
+    categories = ["طعام", "مواصلات", "ترفيه", "تسوق", "تعليم", "صحة", "فواتير", "أخرى"]
 
-    # الهدف: تصغير مجموع الانحرافات
-    prob += pulp.lpSum([dev_p[c] + dev_n[c] for c in cats])
+    # لو ما فيه بيانات، وزع بالتساوي
+    if df.empty:
+        share = available / len(categories)
+        return {cat: round(share, 2) for cat in categories}
 
-    # قيود الانحراف
-    for c in cats:
-        prob += alloc[c] - forecast_per_cat[c] == dev_p[c] - dev_n[c]
+    # حساب النسب من البيانات السابقة
+    category_totals = df.groupby("category")["amount"].sum()
+    total_spent = category_totals.sum()
+    proportions = {cat: (category_totals[cat] / total_spent) if cat in category_totals else 1/len(categories) for cat in categories}
 
-    # قيد الدخل والادخار
-    prob += pulp.lpSum([alloc[c] for c in cats]) <= monthly_income - savings_target
+    # إنشاء نموذج LP
+    prob = pulp.LpProblem("BudgetOptimizer", pulp.LpMaximize)
 
-    for c, val in fixed_bills_map.items():
-        if c in alloc:
-            prob += alloc[c] >= float(val)
+    # متغيرات التوزيع
+    alloc = {cat: pulp.LpVariable(cat, lowBound=0) for cat in categories}
 
-    for c, lo in min_alloc.items():
-        if c in alloc:
-            prob += alloc[c] >= float(lo)
-    for c, hi in max_alloc.items():
-        if c in alloc:
-            prob += alloc[c] <= float(hi)
+    # دالة الهدف = تعظيم التوزيع حسب العادات السابقة
+    prob += pulp.lpSum([alloc[cat] * proportions[cat] for cat in categories])
 
-    prob.solve(pulp.PULP_CBC_CMD(msg=False))
+    # مجموع التوزيع = المتاح
+    prob += pulp.lpSum([alloc[cat] for cat in categories]) == available
 
-    status = pulp.LpStatus[prob.status]
-    result = {c: (alloc[c].value() if alloc[c].value() is not None else 0.0) for c in cats}
-    return status, result
+    # حد أدنى (5%) وحد أقصى (30%)
+    for cat in categories:
+        prob += alloc[cat] >= 0.05 * available
+        prob += alloc[cat] <= 0.30 * available
+
+    # حل المسألة
+    prob.solve(pulp.PULP_CBC_CMD(msg=0))
+
+    return {cat: round(alloc[cat].value(), 2) for cat in categories}

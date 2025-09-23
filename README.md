@@ -96,10 +96,7 @@ smart-expense-tracker/
     </td>
   </tr>
 
-  <tr>
-    <td><img src="assets/screenshots/dashboard.png" alt="لوحة التحكم" width="100%"><br><sub>لوحة التحكم</sub></td>
-    <td><img src="assets/screenshots/filters.png" alt="شريط الفلاتر" width="100%"><br><sub>شريط الفلاتر</sub></td>
-  </tr>
+ 
   <tr>
     <td><img src="assets/screenshots/forecast.png" alt="التنبؤ بالمصاريف" width="100%"><br><sub>التنبؤ</sub></td>
     <td><img src="assets/screenshots/anomalies.png" alt="المصاريف غير الاعتيادية" width="100%"><br><sub>غير الاعتيادية</sub></td>
