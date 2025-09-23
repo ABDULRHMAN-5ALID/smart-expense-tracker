@@ -1,9 +1,9 @@
 
 <div dir="rtl" align="right">
 
-# 💸 متتبع المصاريف الذكي (عربي)
+# 💸 متتبع المصاريف الذكي 
 
-تطبيق **Streamlit** لإدارة وتتبع المصاريف بواجهة عربية (RTL) مع:
+تطبيق **Streamlit** لإدارة وتتبع المصاريف مع:
 - 🤖 **تنبؤ شهري للفئات** (تلقائيًا أو متوسط ذكي عند قلّة البيانات)
 - 🚨 **كشف المصاريف غير الاعتيادية** (<span dir="ltr"><code>IsolationForest</code></span>)
 - 🧮 **مُحسّن الميزانية** بحسب الدخل وهدف الادخار (<span dir="ltr"><code>Linear Programming (PuLP)</code></span>)
@@ -77,16 +77,25 @@ smart-expense-tracker/
 ├─ assets/              
 └─ .streamlit/          
 ```
-
+---
 <div dir="rtl">
 
 ## لقطات من الواجهة
-
-<p align="center">
-  <img src="assets/screenshots/hero.png" alt="الواجهة الرئيسية" width="100%">
-</p>
-
 <table>
+<tr>
+    <td colspan="2" align="center">
+      <img src="assets/screenshots/login_sign_up.png" alt="تسجيل الدخول وإنشاء الحساب" width="100%"><br>
+      <sub>تسجيل الدخول / إنشاء الحساب</sub>
+    </td>
+  </tr>
+
+<tr>
+    <td colspan="2" align="center">
+      <img src="assets/screenshots/hero_.png" alt="الواجهة الرئيسية" width="100%"><br>
+      <sub>الواجهة الرئيسية</sub>
+    </td>
+  </tr>
+
   <tr>
     <td><img src="assets/screenshots/dashboard.png" alt="لوحة التحكم" width="100%"><br><sub>لوحة التحكم</sub></td>
     <td><img src="assets/screenshots/filters.png" alt="شريط الفلاتر" width="100%"><br><sub>شريط الفلاتر</sub></td>
@@ -99,6 +108,7 @@ smart-expense-tracker/
     <td><img src="assets/screenshots/optimizer.png" alt="مُحسّن الميزانية" width="100%"><br><sub>مُحسّن الميزانية</sub></td>
     <td><img src="assets/screenshots/data_sc.png" alt="إدارة البيانات والتحرير" width="100%"><br><sub>إدارة البيانات</sub></td>
   </tr>
+  
 </table>
 
 </div>
