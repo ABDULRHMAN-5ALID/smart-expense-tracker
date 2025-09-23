@@ -88,7 +88,6 @@ smart-expense-tracker/
       <sub>تسجيل الدخول / إنشاء الحساب</sub>
     </td>
   </tr>
-
 <tr>
     <td colspan="2" align="center">
       <img src="assets/screenshots/hero_.png" alt="الواجهة الرئيسية" width="100%"><br>
@@ -96,14 +95,14 @@ smart-expense-tracker/
     </td>
   </tr>
 
- 
+
   <tr>
     <td><img src="assets/screenshots/forecast.png" alt="التنبؤ بالمصاريف" width="100%"><br><sub>التنبؤ</sub></td>
     <td><img src="assets/screenshots/anomalies.png" alt="المصاريف غير الاعتيادية" width="100%"><br><sub>غير الاعتيادية</sub></td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/optimizer.png" alt="مُحسّن الميزانية" width="100%"><br><sub>مُحسّن الميزانية</sub></td>
-    <td><img src="assets/screenshots/data_sc.png" alt="إدارة البيانات والتحرير" width="100%"><br><sub>إدارة البيانات</sub></td>
+    <td><img src="assets/screenshots/img.png" alt="مُحسّن الميزانية" width="100%"><br><sub>مُحسّن الميزانية</sub></td>
+    <td><img src="assets/screenshots/data_.png" alt="إدارة البيانات والتحرير" width="100%"><br><sub>إدارة البيانات</sub></td>
   </tr>
   
 </table>
