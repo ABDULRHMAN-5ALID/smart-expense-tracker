@@ -1,13 +1,20 @@
 import io
-import random
 import datetime
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import init_db, list_expenses, add_expense
+from db import (
+    init_db, create_user, verify_user,
+    add_expense, list_expenses, clear_all_expenses,
+    update_expense, delete_expenses
+)
 from forecast import train_and_forecast_per_category, monthly_projection
+from anomalies import detect_anomalies
+from optimizer import optimize_budget
+from seed_data import seed_demo
 
+# ========== إعداد الصفحة ==========
 st.set_page_config(
     page_title="متتبع المصاريف الذكي",
     page_icon="💸",
@@ -22,81 +29,64 @@ st.markdown(f"""
 html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {{
   direction: rtl;
   text-align: right;
+  font-family: "Cairo", sans-serif;
 }}
 [data-testid="stDataFrame"] th, [data-testid="stDataFrame"] td {{
   text-align: right !important;
+  direction: rtl !important;
 }}
-@media (min-width: 1100px) {{
-  div[data-testid="stAppViewContainer"] {{
-    display: flex !important;
-    flex-direction: row-reverse !important;
-    align-items: stretch !important;
-    gap: 0 !important;
-  }}
-  section[data-testid="stSidebar"][aria-expanded="true"] {{
-    flex: 0 0 {SIDEBAR_WIDTH}px !important;
-    max-width: {SIDEBAR_WIDTH}px !important;
-    border-left: 1px solid #2a2f3a;
-    border-right: none !important;
-    background: inherit;
-    overflow: hidden;
-  }}
-  section[data-testid="stSidebar"][aria-expanded="false"] {{
-    flex: 0 0 0 !important;
-    max-width: 0 !important;
-    width: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border: 0 !important;
-    overflow: hidden !important;
-  }}
-  div[data-testid="stAppViewContainer"] > .main {{
-    flex: 1 1 auto !important;
-    width: auto !important;
-    min-width: 0 !important;
-    overflow: visible;
-  }}
+.js-plotly-plot .plotly .main-svg {{
+  direction: rtl !important;
 }}
-@media (max-width: 1099.98px) {{
-  div[data-testid="stAppViewContainer"] {{ display: block !important; }}
-  section[data-testid="stSidebar"] {{
-    width: 100% !important;
-    max-width: 100% !important;
-    border-left: none !important;
-  }}
-}}
-.stButton>button {{ border-radius: 10px; padding: .5rem 1rem; font-weight: 600; }}
 </style>
 """, unsafe_allow_html=True)
 
+# ========== تسجيل الدخول / الحساب ==========
+def login_ui():
+    st.title("🔐 تسجيل الدخول")
+
+    tab1, tab2 = st.tabs(["تسجيل الدخول", "إنشاء حساب جديد"])
+
+    with tab1:
+        username = st.text_input("👤 اسم المستخدم", key="login_user")
+        password = st.text_input("🔑 كلمة المرور", type="password", key="login_pass")
+        if st.button("تسجيل الدخول", use_container_width=True):
+            uid = verify_user(username, password)
+            if uid:
+                st.session_state["user_id"] = uid
+                st.session_state["username"] = username
+                st.success("تم تسجيل الدخول ✅")
+                st.rerun()
+            else:
+                st.error("بيانات الدخول غير صحيحة ❌")
+
+    with tab2:
+        new_user = st.text_input("👤 اسم المستخدم الجديد", key="reg_user")
+        new_pass = st.text_input("🔑 كلمة المرور", type="password", key="reg_pass")
+        if st.button("إنشاء الحساب", use_container_width=True):
+            if create_user(new_user, new_pass):
+                st.success("تم إنشاء الحساب 🎉 يمكنك الآن تسجيل الدخول")
+            else:
+                st.error("اسم المستخدم مستخدم بالفعل ❌")
+
+# ========== تنسيقات عامة ==========
 def fmt_currency(x: float, suffix=" ريال"):
     try:
         return f"{x:,.0f}{suffix}"
     except Exception:
         return f"{x}{suffix}"
 
-def seed_demo(n=120):
-    cats = ["طعام", "مواصلات", "فواتير", "تسوق", "صحة", "تعليم", "ترفيه", "أخرى"]
-    pays = ["نقدًا", "بطاقة", "Apple Pay", "STC Pay", "أخرى"]
-    today = datetime.date.today()
-    for _ in range(n):
-        days_ago = random.randint(0, 120)
-        d = today - datetime.timedelta(days=days_ago)
-        amount = round(random.uniform(10, 600), 2)
-        add_expense(
-            amount,
-            random.choice(cats),
-            random.choice(pays),
-            str(d),
-            random.choice(["", "قهوة", "سوبرماركت", "أجرة", "فاتورة", "مطعم", "ملابس"]),
-        )
-
-def bootstrap():
-    init_db()
-
-def sidebar_controls():
+# ========== الواجهة الرئيسية ==========
+def sidebar_controls(user_id: int):
     with st.sidebar:
-        st.header("إضافة مصروف جديد")
+        st.header(f"أهلاً، {st.session_state['username']} 👋")
+
+        if st.button("🚪 تسجيل الخروج", use_container_width=True):
+            st.session_state.clear()
+            st.rerun()
+
+        st.markdown("---")
+        st.header("➕ إضافة مصروف جديد")
         amount = st.number_input("المبلغ", min_value=0.0, step=1.0)
         colA, colB = st.columns(2)
         with colA:
@@ -106,61 +96,31 @@ def sidebar_controls():
         date = st.date_input("التاريخ", value=datetime.date.today())
         note = st.text_input("ملاحظة", placeholder="وصف قصير للعملية")
 
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if st.button("➕ إضافة", use_container_width=True):
-                if amount > 0:
-                    add_expense(float(amount), category, payment, str(date), note)
-                    st.success("تمت الإضافة ✅")
-                    st.rerun()
-                else:
-                    st.error("المبلغ يجب أن يكون أكبر من 0")
-        with col_btn2:
-            if st.button("⚡ تحميل بيانات تجريبية", use_container_width=True):
-                seed_demo(120)
-                st.success("تم تحميل بيانات تجريبية ✅")
+        if st.button("➕ إضافة العملية", use_container_width=True):
+            if amount > 0:
+                add_expense(user_id, float(amount), category, payment, str(date), note)
+                st.success("تمت الإضافة ✅")
                 st.rerun()
+            else:
+                st.error("المبلغ يجب أن يكون أكبر من 0")
+
+        if st.button("⚡ تحميل بيانات تجريبية", use_container_width=True):
+            seed_demo(user_id, 100)
+            st.success("تم تحميل بيانات تجريبية ✅")
+            st.rerun()
 
         st.markdown("---")
-        st.subheader("استيراد/تصدير")
+        if st.button("🗑️ حذف جميع البيانات", use_container_width=True):
+            deleted = clear_all_expenses(user_id)
+            st.warning(f"تم حذف {deleted} عملية بشكل نهائي ⚠️")
+            st.rerun()
 
-        rows_all = list_expenses(limit=10_000)
-        df_export = pd.DataFrame(rows_all)
-        if df_export.empty:
-            st.button("⬇️ تصدير CSV", disabled=True, use_container_width=True)
-        else:
-            buf = io.StringIO()
-            df_export.to_csv(buf, index=False, encoding="utf-8-sig")
-            st.download_button(
-                "⬇️ تصدير CSV",
-                buf.getvalue(),
-                file_name="expenses_export.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-
-        uploaded = st.file_uploader("⬆️ استيراد CSV (amount,category,payment_method,date,note)", type=["csv"])
-        if uploaded is not None:
-            try:
-                df_up = pd.read_csv(uploaded)
-                req = {"amount","category","payment_method","date"}
-                if not req.issubset(set(df_up.columns)):
-                    st.error("ملف CSV يجب أن يحتوي الأعمدة: amount, category, payment_method, date (و note اختياري).")
-                else:
-                    for _, r in df_up.iterrows():
-                        add_expense(float(r["amount"]), str(r["category"]),
-                                    str(r["payment_method"]), str(r["date"]), str(r.get("note","") or ""))
-                    st.success(f"تم استيراد {len(df_up)} عملية ✅")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"تعذّر الاستيراد: {e}")
-
+# ========== التبويبات ==========
 def dashboard_tab(df_all: pd.DataFrame):
     st.subheader("📊 لوحة التحكم")
     if df_all.empty:
         st.info("أضف مصروفات لرؤية اللوحة.")
         return
-
     df_all = df_all.copy()
     df_all["date"] = pd.to_datetime(df_all["date"])
 
@@ -182,10 +142,11 @@ def dashboard_tab(df_all: pd.DataFrame):
     by_cat = df_all.groupby("category")["amount"].sum().reset_index()
     fig2 = px.pie(by_cat, values="amount", names="category", title="توزيع المصاريف حسب التصنيف")
     st.plotly_chart(fig2, use_container_width=True)
-
     daily = df_all.groupby(df_all["date"].dt.date)["amount"].sum().reset_index()
+    daily.columns = ["date", "amount"]
     fig3 = px.line(daily, x="date", y="amount", title="المصروف اليومي")
     st.plotly_chart(fig3, use_container_width=True)
+
 
 def forecast_tab(df_all: pd.DataFrame):
     st.subheader("🤖 التنبؤ بالمصروفات")
@@ -193,243 +154,96 @@ def forecast_tab(df_all: pd.DataFrame):
         st.info("لا توجد بيانات كافية للتنبؤ.")
         return
     try:
-        df_small = df_all[["amount","category","date"]].copy()
-        preds_daily = train_and_forecast_per_category(df_small)
-        if not preds_daily:
-            st.info("أضف مصروفات أكثر لإظهار التوقعات.")
-            return
+        preds_daily = train_and_forecast_per_category(df_all[["amount","category","date"]])
         preds_month = monthly_projection(preds_daily, days=30)
         pred_df = pd.DataFrame(
             [{"التصنيف": c, "توقع يومي": round(d,2), "تقدير شهري": round(preds_month[c],2)} for c, d in preds_daily.items()]
         ).sort_values("تقدير شهري", ascending=False)
         st.dataframe(pred_df, use_container_width=True)
-        st.caption("ملاحظة: مع قلة البيانات يُستخدم متوسط بسيط.")
     except Exception as e:
-        st.error(f"خطأ في التنبؤ: {e}")
+        st.error(f"خطأ: {e}")
 
 def anomalies_tab(df_all: pd.DataFrame):
-    st.subheader("🚨 المصاريف غير الاعتيادية (آخر ٩٠ يومًا)")
+    st.subheader("🚨 المصاريف غير الاعتيادية")
     if df_all.empty:
-        st.info("لا توجد بيانات كافية.")
+        st.info("لا توجد بيانات.")
         return
-    try:
-        from anomalies import detect_anomalies
-        alerts = detect_anomalies(df_all[["amount","category","date"]].copy(), window_days=90, contamination=0.06)
-        if alerts.empty:
-            st.success("لا توجد مصاريف غير اعتيادية حاليًا ✔️")
-            return
-        alerts = alerts.sort_values(["level","date"], ascending=[True, False])
-        level_map = {"high": "عالية","medium":"متوسطة","low":"منخفضة"}
-        alerts["المستوى"] = alerts["level"].map(level_map)
-        alerts["التاريخ"] = pd.to_datetime(alerts["date"]).dt.date
-        alerts = alerts.rename(columns={"category":"التصنيف","amount":"المبلغ"})
-        alerts = alerts[["التصنيف","التاريخ","المبلغ","المستوى"]]
+    alerts = detect_anomalies(df_all[["amount","category","date"]].copy(), window_days=90, contamination=0.06)
+    if alerts.empty:
+        st.success("لا توجد مصاريف غير اعتيادية ✔️")
+    else:
         st.dataframe(alerts, use_container_width=True)
-        st.caption("يتم التقدير بنموذج IsolationForest وحدود مئوية لكل تصنيف.")
-    except Exception as e:
-        st.error(f"خطأ في الكشف عن الشذوذ: {e}")
 
 def optimizer_tab(df_all: pd.DataFrame):
     st.subheader("🧮 مُحسّن الميزانية")
     if df_all.empty:
         st.info("أضف بيانات أولًا.")
         return
+    cats = sorted(df_all["category"].unique().tolist())
+    income = st.number_input("💰 الدخل الشهري", min_value=0.0, value=8000.0, step=100.0)
+    target = st.number_input("🎯 هدف الادخار", min_value=0.0, value=1000.0, step=100.0)
 
-    df = df_all.copy()
-    df["date"] = pd.to_datetime(df["date"])
-    cats = sorted(df["category"].unique().tolist())
+    preds_daily = train_and_forecast_per_category(df_all[["amount","category","date"]])
+    baseline = monthly_projection(preds_daily, days=30) if preds_daily else {}
 
-    col1, col2 = st.columns(2)
-    with col1:
-        income = st.number_input("الدخل الشهري", min_value=0.0, value=8000.0, step=100.0)
-    with col2:
-        target = st.number_input("هدف الادخار", min_value=0.0, value=1000.0, step=100.0)
+    if st.button("احسب التوزيع"):
+        status, allocs = optimize_budget(baseline, income, target, {}, {}, {})
+        st.dataframe(pd.DataFrame([{
+            "التصنيف": c,
+            "المقترح": round(allocs.get(c,0.0),2)
+        } for c in cats]))
 
-    st.markdown("**حدود اختيارية:**")
-    fixed_map, min_bounds, max_bounds = {}, {}, {}
-    with st.expander("تحديد حدود/فواتير لكل فئة (اختياري)"):
-        for c in cats:
-            c1,c2,c3 = st.columns(3)
-            with c1:
-                fixed_map[c] = st.number_input(f"حد أدنى ثابت لـ «{c}»", min_value=0.0, value=0.0, step=50.0, key=f"fix_{c}")
-            with c2:
-                min_bounds[c] = st.number_input(f"حد أدنى لـ «{c}»", min_value=0.0, value=0.0, step=50.0, key=f"min_{c}")
-            with c3:
-                max_bounds[c] = st.number_input(f"حد أقصى لـ «{c}»", min_value=0.0, value=0.0, step=50.0, key=f"max_{c}")
-
-    try:
-        preds_daily = train_and_forecast_per_category(df[["amount","category","date"]])
-        baseline = monthly_projection(preds_daily, days=30) if preds_daily else {}
-    except Exception:
-        baseline = {}
-    if not baseline:
-        g = df.groupby([df["date"].dt.to_period("M"), "category"])["amount"].sum().reset_index()
-        month_cat = g.groupby("category")["amount"].mean().to_dict()
-        baseline = {c: float(month_cat.get(c, 0.0)) for c in cats}
-
-    st.markdown("**الأساس (Baseline) من التنبؤ/المتوسط:**")
-    st.dataframe(pd.DataFrame([{"التصنيف": c, "الأساس (ريال)": round(baseline.get(c,0.0),2)} for c in cats]),
-                 use_container_width=True)
-
-    if st.button("احسب التوزيع المقترح"):
-        try:
-            from optimizer import optimize_budget
-            status, allocs = optimize_budget(
-                forecast_per_cat=baseline,
-                monthly_income=income,
-                savings_target=target,
-                fixed_bills_map=fixed_map,
-                min_alloc=min_bounds,
-                max_alloc={k:v for k,v in max_bounds.items() if v>0}
-            )
-            if status != "Optimal":
-                st.warning(f"الحل ليس مثاليًا ({status}). جرّب تعديل الحدود أو تقليل هدف الادخار.")
-            compare = pd.DataFrame([{
-                "التصنيف": c,
-                "الأساس (ريال)": round(baseline.get(c,0.0),2),
-                "المقترح (ريال)": round(allocs.get(c,0.0),2),
-                "الفرق": round(allocs.get(c,0.0)-baseline.get(c,0.0),2)
-            } for c in cats]).sort_values("المقترح (ريال)", ascending=False)
-            st.success("تم الحساب ✅")
-            st.dataframe(compare, use_container_width=True)
-            total_alloc = sum(allocs.values())
-            st.caption(f"إجمالي المخصصات: {fmt_currency(total_alloc)} — المتاح بعد الادخار: {fmt_currency(income - target)}")
-        except Exception as e:
-            st.error(f"خطأ أثناء التحسين: {e}")
-
-def data_tab(df_all: pd.DataFrame):
-    st.subheader("🗂️ إدارة البيانات (تحرير + حذف)")
-
+def data_tab(user_id: int, df_all: pd.DataFrame):
+    st.subheader("🗂️ إدارة البيانات")
     if df_all.empty:
-        st.info("لا توجد بيانات بعد.")
+        st.info("لا توجد بيانات.")
         return
-
     view_cols = ["id", "amount", "category", "payment_method", "date", "note"]
     df_view = df_all[view_cols].copy()
+    edited = st.data_editor(df_view, num_rows="dynamic", use_container_width=True, disabled=["id"])
 
-    st.caption("انقر مرتين على الخلية لتعديلها. لا يمكن تعديل العمود (id).")
-    edited = st.data_editor(
-        df_view,
-        num_rows="dynamic",
-        use_container_width=True,
-        disabled=["id"],
-        column_config={
-            "amount": st.column_config.NumberColumn("amount", step=1.0, help="المبلغ"),
-            "category": st.column_config.SelectboxColumn("category", options=["طعام","مواصلات","فواتير","تسوق","صحة","تعليم","ترفيه","أخرى"]),
-            "payment_method": st.column_config.SelectboxColumn("payment_method", options=["نقدًا","بطاقة","Apple Pay","STC Pay","أخرى"]),
-            "date": st.column_config.DateColumn("date"),
-            "note": st.column_config.TextColumn("note"),
-        },
-        key="editor_table",
-    )
+    if st.button("💾 حفظ التعديلات"):
+        changed = 0
+        orig = df_view.set_index("id")
+        new = edited.set_index("id")
+        for eid in new.index:
+            diff = {}
+            for col in ["amount","category","payment_method","date","note"]:
+                old_val = orig.loc[eid, col]
+                new_val = new.loc[eid, col]
+                if old_val != new_val:
+                    diff[col] = new_val
+            if diff:
+                changed += update_expense(user_id, int(eid), diff)
+        st.success(f"تم حفظ {changed} تعديلًا ✅")
+        st.rerun()
 
-    save_col, del_col = st.columns([1,1])
-    with save_col:
-        if st.button("💾 حفظ التعديلات"):
-            try:
-                from db import update_expense
-                changed = 0
-                orig = df_view.set_index("id")
-                new = edited.set_index("id")
-                for eid in new.index:
-                    diff = {}
-                    for col in ["amount","category","payment_method","date","note"]:
-                        old_val = None if eid not in orig.index else orig.loc[eid, col]
-                        new_val = new.loc[eid, col]
-                        if col == "date" and pd.notna(new_val):
-                            new_val = pd.to_datetime(new_val).date().isoformat()
-                            old_val = pd.to_datetime(old_val).date().isoformat() if pd.notna(old_val) else old_val
-                        if (pd.isna(old_val) and pd.notna(new_val)) or (pd.notna(old_val) and pd.isna(new_val)) or (old_val != new_val):
-                            diff[col] = new_val
-                    if diff:
-                        changed += update_expense(int(eid), diff)
-                st.success(f"تم حفظ {changed} تعديلًا ✅")
-                st.rerun()
-            except Exception as e:
-                st.error(f"تعذّر الحفظ: {e}")
+    ids = edited["id"].tolist()
+    sel_to_delete = st.multiselect("اختر للحذف", ids)
+    if st.button("🗑️ حذف المحدد"):
+        deleted = delete_expenses(user_id, sel_to_delete)
+        st.success(f"تم حذف {deleted} سجلًا ✅")
+        st.rerun()
 
-    with del_col:
-        ids = edited["id"].tolist()
-        sel_to_delete = st.multiselect("اختر السجلات المراد حذفها", ids, label_visibility="collapsed")
-        if st.button("🗑️ حذف المحدد"):
-            try:
-                from db import delete_expenses
-                deleted = delete_expenses([int(i) for i in sel_to_delete])
-                st.success(f"تم حذف {deleted} سجلًا ✅")
-                st.rerun()
-            except Exception as e:
-                st.error(f"تعذّر الحذف: {e}")
-
-def apply_filters(df: pd.DataFrame, date_range, cats, pays, amount_min, amount_max) -> pd.DataFrame:
-    if df.empty:
-        return df
-    out = df.copy()
-    out["date"] = pd.to_datetime(out["date"]).dt.date
-    if date_range:
-        start, end = date_range
-        out = out[(out["date"] >= start) & (out["date"] <= end)]
-    if cats:
-        out = out[out["category"].isin(cats)]
-    if pays:
-        out = out[out["payment_method"].isin(pays)]
-    if amount_min is not None:
-        out = out[out["amount"] >= amount_min]
-    if amount_max is not None and amount_max > 0:
-        out = out[out["amount"] <= amount_max]
-    return out
-
+# ========== Main ==========
 def main():
-    bootstrap()
-    st.title("💸 متتبع المصاريف الذكي")
-    sidebar_controls()
+    init_db()
+    if "user_id" not in st.session_state:
+        login_ui()
+        return
 
-    rows_all = list_expenses(limit=10_000)
+    user_id = st.session_state["user_id"]
+    sidebar_controls(user_id)
+
+    rows_all = list_expenses(user_id, limit=10_000)
     df_all = pd.DataFrame(rows_all)
 
-    st.markdown("### 🎛️ الفلاتر")
-    if df_all.empty:
-        st.info("لا توجد بيانات بعد لاستخدام الفلاتر.")
-        filt_df = df_all
-    else:
-        df_all["date"] = pd.to_datetime(df_all["date"])
-        min_d = df_all["date"].min().date()
-        max_d = df_all["date"].max().date()
-
-        colF1, colF2, colF3 = st.columns([2,2,2])
-        with colF1:
-            dr = st.date_input("الفترة", value=(min_d, max_d))
-            date_range = (dr[0], dr[1]) if isinstance(dr, tuple) and len(dr) == 2 else (min_d, max_d)
-
-        cats_all = sorted(df_all["category"].unique().tolist())
-        pays_all = sorted(df_all["payment_method"].unique().tolist())
-        with colF2:
-            cats_sel = st.multiselect("التصنيفات", cats_all, default=cats_all)
-        with colF3:
-            pays_sel = st.multiselect("طرق الدفع", pays_all, default=pays_all)
-
-        cMin, cMax = st.columns(2)
-        with cMin:
-            a_min = st.number_input("الحد الأدنى للمبلغ", min_value=0.0, value=0.0, step=10.0)
-        with cMax:
-            a_max = st.number_input("الحد الأقصى للمبلغ (اختياري)", min_value=0.0, value=0.0, step=10.0)
-
-        filt_df = apply_filters(
-            df_all,
-            date_range=date_range,
-            cats=cats_sel,
-            pays=pays_sel,
-            amount_min=a_min,
-            amount_max=a_max if a_max > 0 else None
-        )
-
-        st.caption(f"النتائج بعد الفلترة: {len(filt_df)} عملية من أصل {len(df_all)}.")
-
     tabs = st.tabs(["📊 اللوحة", "🤖 التنبؤ", "🚨 غير الاعتيادية", "🧮 المُحسّن", "🗂️ البيانات"])
-    with tabs[0]: dashboard_tab(filt_df)
-    with tabs[1]: forecast_tab(filt_df)
-    with tabs[2]: anomalies_tab(filt_df)
-    with tabs[3]: optimizer_tab(filt_df)
-    with tabs[4]: data_tab(filt_df)
+    with tabs[0]: dashboard_tab(df_all)
+    with tabs[1]: forecast_tab(df_all)
+    with tabs[2]: anomalies_tab(df_all)
+    with tabs[3]: optimizer_tab(df_all)
+    with tabs[4]: data_tab(user_id, df_all)
 
 if __name__ == "__main__":
     main()

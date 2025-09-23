@@ -1,3 +1,4 @@
+
 <div dir="rtl" align="right">
 
 # 💸 متتبع المصاريف الذكي (عربي)
@@ -71,6 +72,7 @@ smart-expense-tracker/
 ├─ anomalies.py        
 ├─ optimizer.py         
 ├─ utils.py             
+├─ seed_data.py         
 ├─ data/                
 ├─ assets/              
 └─ .streamlit/          
@@ -101,7 +103,6 @@ smart-expense-tracker/
 
 </div>
 
-
 ---
 
 ## 📦 المتطلبات (مختصرة)
@@ -113,10 +114,9 @@ scikit-learn>=1.3
 pulp>=2.7
 python-dateutil>=2.8
 xgboost>=1.7
-
 ```
----
 
+---
 
 ## ☁️ النشر على Streamlit Cloud
 1. اربط حسابك بـ <span dir="ltr">Streamlit Cloud</span>.  
